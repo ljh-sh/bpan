@@ -1,0 +1,26 @@
+# Build artifacts
+/bpan
+/bpan.exe
+/dist/
+/build/
+
+# Go
+*.test
+*.out
+*.prof
+coverage.txt
+coverage.html
+
+# Local config
+.env
+.env.local
+*.local.yaml
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Vendored SDK build cache
+/upstream/baidu-drive-sdk-go/.cache/

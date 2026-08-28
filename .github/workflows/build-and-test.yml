@@ -1,0 +1,100 @@
+name: build-and-test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# Cancel in-flight runs when a new commit lands on the same branch.
+concurrency:
+  group: bt-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # 12-platform cross-compile matrix. Native runners are used for linux/amd64,
+  # darwin/amd64, darwin/arm64, windows/amd64; the rest cross-compile from
+  # ubuntu-latest with CGO_ENABLED=0.
+  build:
+    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {goos: linux,   goarch: amd64, runner: ubuntu-latest, native: true,  test: true}
+          - {goos: linux,   goarch: arm64, runner: ubuntu-latest, native: false, test: false}
+          - {goos: darwin,  goarch: amd64, runner: macos-13,      native: true,  test: true}
+          - {goos: darwin,  goarch: arm64, runner: macos-latest,  native: true,  test: true}
+          - {goos: windows, goarch: amd64, runner: windows-latest, native: true,  test: true}
+          - {goos: windows, goarch: arm64, runner: windows-latest, native: true,  test: false}
+          - {goos: freebsd, goarch: amd64, runner: ubuntu-latest, native: false, test: false}
+          - {goos: freebsd, goarch: arm64, runner: ubuntu-latest, native: false, test: false}
+          - {goos: openbsd, goarch: amd64, runner: ubuntu-latest, native: false, test: false}
+          - {goos: openbsd, goarch: arm64, runner: ubuntu-latest, native: false, test: false}
+          - {goos: netbsd,  goarch: amd64, runner: ubuntu-latest, native: false, test: false}
+          - {goos: netbsd,  goarch: arm64, runner: ubuntu-latest, native: false, test: false}
+    steps:
+      - name: checkout
+        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v6
+
+      - name: setup Go 1.26
+        uses: actions/setup-go@fba3fb4ead8c8e09a06f1d32ae5436e5818eff15 # v6
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: download modules
+        env:
+          GOPROXY: https://goproxy.cn,direct
+        run: go mod download
+
+      - name: build (cross-compile, CGO_ENABLED=0)
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        shell: bash
+        run: |
+          BIN=bpan-${{ matrix.goos }}-${{ matrix.goarch }}
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            BIN=bpan-${{ matrix.goos }}-${{ matrix.goarch }}.exe
+            go build -trimpath -ldflags="-s -w" -o "$BIN" ./cmd/bpan
+          else
+            go build -trimpath -ldflags="-s -w" -o "$BIN" ./cmd/bpan
+          fi
+          ls -lh "$BIN"
+
+      - name: smoke (binary help)
+        if: matrix.native && matrix.goos != 'windows'
+        shell: bash
+        run: |
+          ./bpan-${{ matrix.goos }}-${{ matrix.goarch }} version
+          ./bpan-${{ matrix.goos }}-${{ matrix.goarch }} --help | head -3
+
+      - name: smoke (binary help, windows)
+        if: matrix.native && matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          .\bpan-${{ matrix.goos }}-${{ matrix.goarch }}.exe version
+          .\bpan-${{ matrix.goos }}-${{ matrix.goarch }}.exe --help | Select-Object -First 3
+
+      - name: native test
+        if: matrix.test
+        env:
+          GOPROXY: https://goproxy.cn,direct
+        run: go test -count=1 ./...
+
+      - name: upload artefact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: bpan-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            bpan-${{ matrix.goos }}-${{ matrix.goarch }}*
+            !*.tmp
+          if-no-files-found: error
+          retention-days: 7

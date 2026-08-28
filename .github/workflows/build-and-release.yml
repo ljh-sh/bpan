@@ -1,0 +1,186 @@
+name: build-and-release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'override version (otherwise derived from tag or current date)'
+        required: false
+        type: string
+
+# Never cancel a release mid-flight.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write  # for cosign OIDC
+
+jobs:
+  build:
+    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {goos: linux,   goarch: amd64, runner: ubuntu-latest}
+          - {goos: linux,   goarch: arm64, runner: ubuntu-latest}
+          - {goos: freebsd, goarch: amd64, runner: ubuntu-latest}
+          - {goos: freebsd, goarch: arm64, runner: ubuntu-latest}
+          - {goos: openbsd, goarch: amd64, runner: ubuntu-latest}
+          - {goos: openbsd, goarch: arm64, runner: ubuntu-latest}
+          - {goos: netbsd,  goarch: amd64, runner: ubuntu-latest}
+          - {goos: netbsd,  goarch: arm64, runner: ubuntu-latest}
+    steps:
+      - name: checkout
+        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v6
+
+      - name: derive version
+        id: ver
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ github.ref_name }}" ] && [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev" >> "$GITHUB_OUTPUT"
+          fi
+          echo "commit=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: setup Go 1.26
+        uses: actions/setup-go@fba3fb4ead8c8e09a06f1d32ae5436e5818eff15 # v6
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: download modules
+        env:
+          GOPROXY: https://goproxy.cn,direct
+        run: go mod download
+
+      - name: build (CGO_ENABLED=0, ldflags for version stamping)
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          LD="-s -w -X github.com/ljh-sh/bpan/internal/version.Version=${{ steps.ver.outputs.version }}"
+          LD="$LD -X github.com/ljh-sh/bpan/internal/version.Commit=${{ steps.ver.outputs.commit }}"
+          LD="$LD -X github.com/ljh-sh/bpan/internal/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          LD="$LD -X github.com/ljh-sh/bpan/internal/version.GoVersion=$(go env GOVERSION)"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            BIN=bpan-${{ matrix.goos }}-${{ matrix.goarch }}.exe
+          else
+            BIN=bpan-${{ matrix.goos }}-${{ matrix.goarch }}
+          fi
+          go build -trimpath -ldflags="$LD" -o "$BIN" ./cmd/bpan
+          ls -lh "$BIN"
+          echo "$BIN" >> "$GITHUB_OUTPUT"
+          echo "asset_name=$(basename "$BIN")" >> "$GITHUB_OUTPUT"
+
+      - name: package (tar.xz for unix, zip for windows)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN=bpan-${{ matrix.goos }}-${{ matrix.goarch }}
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            BIN=bpan-${{ matrix.goos }}-${{ matrix.goarch }}.exe
+          fi
+          # Copy companion docs next to the binary.
+          cp README.md README.cn.md LICENSE NOTICE.md "$(dirname "$BIN")/" 2>/dev/null || true
+          STAGE="$(mktemp -d)/bpan-pkg"
+          mkdir -p "$STAGE"
+          cp "$BIN" README.md README.cn.md LICENSE NOTICE.md "$STAGE/" 2>/dev/null || cp "$BIN" "$STAGE/"
+          cd "$(dirname "$STAGE")"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            7z a -tzip "$BIN.zip" "$STAGE"/* 2>/dev/null || \
+              (cd "$STAGE" && zip -r "../$BIN.zip" .)
+          else
+            tar -cJf "$BIN.tar.xz" -C "$(dirname "$STAGE")" "$(basename "$STAGE")"
+          fi
+          ls -lh "$BIN".tar.xz "$BIN".zip 2>/dev/null || ls -lh "$BIN".tar.xz 2>/dev/null || ls -lh "$BIN".zip 2>/dev/null
+          PKG=$(ls bpan-${{ matrix.goos }}-${{ matrix.goarch }}.* | grep -v '\.exe$\|^bpan-${{ matrix.goos }}-${{ matrix.goarch }}$' | head -1)
+          echo "asset_path=$PWD/$PKG" >> "$GITHUB_OUTPUT"
+
+      - name: upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: bpan-release-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ steps.build.outputs.asset_path }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: checkout
+        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v6
+
+      - name: download all artifacts
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317 # v7
+        with:
+          path: dist-artifacts
+
+      - name: gather assets
+        id: gather
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          find dist-artifacts -type f \( -name '*.tar.xz' -o -name '*.zip' \) -exec cp -v {} release-assets/ \;
+          cd release-assets
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+          echo "asset_count=$(ls -1 | wc -l)" >> "$GITHUB_OUTPUT"
+
+      - name: sign SHA256SUMS (cosign keyless)
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+        run: |
+          cosign sign-blob --yes \
+            --output-signature SHA256SUMS.sig \
+            --bundle SHA256SUMS.bundle \
+            release-assets/SHA256SUMS
+
+      - name: create / update GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="v${{ github.event.inputs.version }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="v0.0.0-dev"
+          fi
+          gh release create "$TAG" \
+            --title "bpan ${TAG#v}" \
+            --generate-notes \
+            --draft \
+            release-assets/* || \
+          gh release upload "$TAG" \
+            release-assets/* --clobber
+          echo "released=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: print release url
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="v${{ github.event.inputs.version }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          gh release view "$TAG" --json url -q .url

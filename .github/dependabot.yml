@@ -1,0 +1,24 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+    groups:
+      # The vendored SDK is owned by Baidu — we update it via git subtree, not go-mod bump.
+      # dependabot should ignore the SDK's pseudo-version.
+      ignore:
+        - dependency-name: "github.com/baidu-netdisk/baidu-drive-sdk-go"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci(deps)"

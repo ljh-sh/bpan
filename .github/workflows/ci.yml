@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# Cancel in-flight runs of this workflow when a new push lands on the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  go-vet-build-test:
+    name: go vet / build / test (linux-amd64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: checkout
+        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v6
+
+      - name: setup Go 1.26
+        uses: actions/setup-go@fba3fb4ead8c8e09a06f1d32ae5436e5818eff15 # v6
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: download modules
+        env:
+          GOPROXY: https://goproxy.cn,direct
+        run: go mod download
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build -trimpath -o /tmp/bpan ./cmd/bpan
+
+      - name: go test
+        env:
+          GOPROXY: https://goproxy.cn,direct
+        run: go test -race -count=1 ./...
+
+      - name: smoke (binary help)
+        run: /tmp/bpan --help | head -5 && /tmp/bpan version
