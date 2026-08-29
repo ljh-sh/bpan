@@ -1,0 +1,142 @@
+name: build-and-release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# Per-tag concurrency: each release can run independently.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  # SINGLE macos-latest runner.
+  # All 8 platforms cross-compiled sequentially via cargo (native) +
+  # cargo-zigbuild (cross). No multi-runner matrix — release time = single
+  # runner queue + sequential build, not max(N runners).
+  build:
+    name: build (8 platforms, macos runner)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@f548e57e5441ff5a4c46bf1e1b8685f8e4a348a # v6
+
+      - name: setup Rust stable
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
+        with:
+          toolchain: stable
+
+      - name: install cargo-zigbuild + zig
+        run: |
+          brew install zig
+          cargo install --locked cargo-zigbuild
+
+      - name: install cross-compile targets
+        run: |
+          rustup target add \
+            x86_64-apple-darwin \
+            aarch64-apple-darwin \
+            x86_64-unknown-linux-musl \
+            aarch64-unknown-linux-musl \
+            x86_64-unknown-linux-gnu \
+            aarch64-unknown-linux-gnu \
+            x86_64-pc-windows-gnu \
+            aarch64-pc-windows-gnullvm
+
+      - name: derive version
+        id: ver
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "commit=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      # Mirrors the exact commands verified locally on macOS:
+      # - darwin × 2: native (cargo build --release --target ...)
+      # - linux × 4 + windows × 2: cargo zigbuild (zig handles cross-link)
+      - name: build 8 platforms sequentially
+        env:
+          BPAN_VERSION: ${{ steps.ver.outputs.version }}
+          BPAN_COMMIT: ${{ steps.ver.outputs.commit }}
+          BPAN_BUILD_TIME: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          # (target, os, arch, build_cmd, exe_ext)
+          targets=(
+            "x86_64-unknown-linux-musl linux amd64 zigbuild ''"
+            "aarch64-unknown-linux-musl linux arm64 zigbuild ''"
+            "x86_64-unknown-linux-gnu linux amd64 zigbuild ''"
+            "aarch64-unknown-linux-gnu linux arm64 zigbuild ''"
+            "x86_64-apple-darwin darwin amd64 native ''"
+            "aarch64-apple-darwin darwin arm64 native ''"
+            "x86_64-pc-windows-gnu windows amd64 zigbuild .exe"
+            "aarch64-pc-windows-gnullvm windows arm64 zigbuild .exe"
+          )
+
+          for entry in "${targets[@]}"; do
+            read -r tgt os arch method ext <<< "$entry"
+            BIN="bpan-${os}-${arch}${ext}"
+            echo ""
+            echo "==> building $os/$arch ($tgt, $method)"
+            if [ "$method" = "native" ]; then
+              cargo build --release --target "$tgt" --locked 2>&1 | tail -10
+            else
+              cargo zigbuild --release --target "$tgt" --locked 2>&1 | tail -10
+            fi
+            STAGE="dist/${BIN%.exe}-pkg"
+            mkdir -p "$STAGE"
+            cp "target/$tgt/release/bpan${ext}" "$STAGE/${BIN}"
+            cp README.md README.cn.md LICENSE NOTICE.md SECURITY.md "$STAGE/"
+            echo "  ok: $(ls -lh "$STAGE/${BIN}" | awk '{print $5}')"
+          done
+
+      - name: generate SHA256SUMS
+        run: |
+          cd dist
+          # Walk each -pkg dir and tar.xz + hash
+          for pkg in */; do
+            name="${pkg%/}"
+            arch="${name%-pkg}"
+            (cd "$pkg" && tar -cJf "../../${arch}.tar.xz" .)
+          done
+          sha256sum -- *.tar.xz > SHA256SUMS
+          ls -lh
+          cat SHA256SUMS
+
+      - name: sign SHA256SUMS (cosign keyless)
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+        run: |
+          cosign sign-blob --yes \
+            --output-signature dist/SHA256SUMS.sig \
+            --bundle dist/SHA256SUMS.bundle \
+            dist/SHA256SUMS
+
+      - name: create / update GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="v${{ github.event.inputs.version }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          gh release create "$TAG" \
+            --title "bpan ${TAG#v}" \
+            --generate-notes \
+            --draft \
+            dist/* || \
+          gh release upload "$TAG" dist/* --clobber
+          echo "released=$TAG"

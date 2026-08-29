@@ -1,0 +1,91 @@
+name: build-and-test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: bt-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Single ubuntu-latest runner cross-builds all 12 platforms via
+  # cargo-zigbuild. No matrix → no GitHub Actions queue throttling.
+  cross-build:
+    name: cross-build (12 platforms)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v6
+
+      - name: setup Rust stable
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
+        with:
+          toolchain: stable
+
+      - name: install 12 cross-compile targets
+        run: |
+          rustup target add \
+            x86_64-unknown-linux-musl \
+            aarch64-unknown-linux-musl \
+            x86_64-apple-darwin \
+            aarch64-apple-darwin \
+            x86_64-pc-windows-gnu \
+            aarch64-pc-windows-msvc \
+            x86_64-unknown-freebsd \
+            aarch64-unknown-freebsd \
+            x86_64-unknown-openbsd \
+            aarch64-unknown-openbsd \
+            x86_64-unknown-netbsd \
+            aarch64-unknown-netbsd
+
+      - name: cache cargo registry + target
+        uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+
+      - name: install cargo-zigbuild + zig
+        run: |
+          cargo install --locked cargo-zigbuild
+          ZIG_VERSION="0.13.0"
+          curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" | tar -xJ -C /tmp
+          echo "PATH=/tmp/zig-linux-x86_64-${ZIG_VERSION}:$PATH" >> "$GITHUB_ENV"
+
+      - name: cross-build all 12 platforms
+        env:
+          BPAN_VERSION: 0.2.0-dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          targets=(
+            "x86_64-unknown-linux-musl"
+            "aarch64-unknown-linux-musl"
+            "x86_64-apple-darwin"
+            "aarch64-apple-darwin"
+            "x86_64-pc-windows-gnu"
+            "aarch64-pc-windows-msvc"
+            "x86_64-unknown-freebsd"
+            "aarch64-unknown-freebsd"
+            "x86_64-unknown-openbsd"
+            "aarch64-unknown-openbsd"
+            "x86_64-unknown-netbsd"
+            "aarch64-unknown-netbsd"
+          )
+          ok=0
+          fail=0
+          for tgt in "${targets[@]}"; do
+            echo ""
+            echo "==> building $tgt"
+            if cargo zigbuild --target "$tgt" --release --locked 2>&1 | tail -5; then
+              ok=$((ok+1))
+            else
+              echo "::warning::build failed for $tgt"
+              fail=$((fail+1))
+            fi
+          done
+          echo ""
+          echo "==> summary: $ok ok, $fail failed"
+          [ "$fail" -eq 0 ]

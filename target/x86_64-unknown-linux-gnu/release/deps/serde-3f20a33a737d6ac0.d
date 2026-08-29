@@ -1,0 +1,14 @@
+/Users/l/.x-repo/github.com/ljh-sh/bpan/target/x86_64-unknown-linux-gnu/release/deps/serde-3f20a33a737d6ac0.d: /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /Users/l/.x-repo/github.com/ljh-sh/bpan/target/x86_64-unknown-linux-gnu/release/build/serde-2bf8ae3de28ad57f/out/private.rs
+
+/Users/l/.x-repo/github.com/ljh-sh/bpan/target/x86_64-unknown-linux-gnu/release/deps/libserde-3f20a33a737d6ac0.rlib: /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /Users/l/.x-repo/github.com/ljh-sh/bpan/target/x86_64-unknown-linux-gnu/release/build/serde-2bf8ae3de28ad57f/out/private.rs
+
+/Users/l/.x-repo/github.com/ljh-sh/bpan/target/x86_64-unknown-linux-gnu/release/deps/libserde-3f20a33a737d6ac0.rmeta: /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /Users/l/.x-repo/github.com/ljh-sh/bpan/target/x86_64-unknown-linux-gnu/release/build/serde-2bf8ae3de28ad57f/out/private.rs
+
+/Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs:
+/Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs:
+/Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs:
+/Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs:
+/Users/l/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs:
+/Users/l/.x-repo/github.com/ljh-sh/bpan/target/x86_64-unknown-linux-gnu/release/build/serde-2bf8ae3de28ad57f/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/l/.x-repo/github.com/ljh-sh/bpan/target/x86_64-unknown-linux-gnu/release/build/serde-2bf8ae3de28ad57f/out

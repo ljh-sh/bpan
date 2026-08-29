@@ -1,0 +1,30 @@
+# Build artifacts
+/bpan
+/bpan.exe
+/dist/
+/build/
+
+# Go
+*.test
+*.out
+*.prof
+coverage.txt
+coverage.html
+
+# Local config
+.env
+.env.local
+*.local.yaml
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Vendored SDK build cache
+/upstream/baidu-drive-sdk-go/.cache/
+# Cargo lock for libraries (we ship a binary, not a library)
+# Cargo.lock is intentionally NOT gitignored for binary crates with bin targets
+# — but we still don't want target/ or huge build artifacts.
+# target/ is already excluded above.

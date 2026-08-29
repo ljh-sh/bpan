@@ -1,0 +1,35 @@
+title: bpan
+description: >-
+  bpan — a CLI for the Baidu Netdisk personal Open Platform, written in Go,
+  with the official Baidu Netdisk SDK vendored via git subtree.
+baseurl: /bpan
+url: https://ljh-sh.github.io
+theme: ~   # do NOT inject minima; we ship our own layout
+
+lang: en
+languages: [en, zh]
+
+markdown: kramdown
+highlighter: rouge
+permalink: /:title/
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor/
+  - node_modules/
+  - README.md
+  - README.cn.md
+
+defaults:
+  - scope: {path: ""}
+    values:
+      layout: default
+      lang: en
+
+nav:
+  - {title: Home,        url: /}
+  - {title: Install,     url: /install/}
+  - {title: CLI,         url: /cli/}
+  - {title: 中文,         url: /zh/}
+  - {title: GitHub,      url: https://github.com/ljh-sh/bpan}

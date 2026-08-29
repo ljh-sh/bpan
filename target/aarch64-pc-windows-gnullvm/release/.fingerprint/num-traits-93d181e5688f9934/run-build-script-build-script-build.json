@@ -1,0 +1,1 @@
+{"rustc":13850170861107434965,"features":"","declared_features":"","target":0,"profile":0,"path":0,"deps":[[5157631553186200874,"build_script_build",false,16130737886268778099]],"local":[{"RerunIfChanged":{"output":"aarch64-pc-windows-gnullvm/release/build/num-traits-93d181e5688f9934/output","paths":["build.rs"]}}],"rustflags":[],"config":0,"compile_kind":0}
