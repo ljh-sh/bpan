@@ -7,7 +7,7 @@ description = "AI-agent-first CLI + Rust SDK for Baidu Netdisk personal Open Pla
 license     = "Apache-2.0"
 repository  = "https://github.com/ljh-sh/bpan"
 homepage    = "https://ljh-sh.github.io/bpan/"
-keywords    = ["baidu", "netdisk", "cloud-storage", "api", "sdk", "agent", "cli"]
+keywords    = ["baidu", "netdisk", "cli", "api", "sdk"]
 categories  = ["api-bindings", "command-line-interface", "filesystem"]
 readme      = "README.md"
 
