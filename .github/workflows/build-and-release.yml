@@ -72,29 +72,28 @@ jobs:
           set -euo pipefail
           mkdir -p dist
 
-          # (target, asset_arch_for_name, os, abi_suffix, build_method, exe_ext)
-          # Asset names follow bpan-<os>-<arch>[-<abi>].tar.xz convention
-          # (win × 2 are mingw via zig; darwin has no abi suffix).
+          # Each row: "<rust-target> <asset-arch> <os> <abi> <method> <exe>"
+          # Use semicolons as delimiter (no IFS weirdness with multi-space).
           targets=(
-            "x86_64-unknown-linux-musl x64 linux musl zigbuild ''"
-            "aarch64-unknown-linux-musl arm64 linux musl zigbuild ''"
-            "x86_64-unknown-linux-gnu x64 linux gnu zigbuild ''"
-            "aarch64-unknown-linux-gnu arm64 linux gnu zigbuild ''"
-            "x86_64-apple-darwin x64 darwin '' native ''"
-            "aarch64-apple-darwin arm64 darwin '' native ''"
-            "x86_64-pc-windows-gnu x64 win mingw zigbuild .exe"
-            "aarch64-pc-windows-gnullvm arm64 win mingw zigbuild .exe"
+            "x86_64-unknown-linux-musl;x64;linux;musl;zigbuild;"
+            "aarch64-unknown-linux-musl;arm64;linux;musl;zigbuild;"
+            "x86_64-unknown-linux-gnu;x64;linux;gnu;zigbuild;"
+            "aarch64-unknown-linux-gnu;arm64;linux;gnu;zigbuild;"
+            "x86_64-apple-darwin;x64;darwin;;native;"
+            "aarch64-apple-darwin;arm64;darwin;;native;"
+            "x86_64-pc-windows-gnu;x64;win;mingw;zigbuild;.exe"
+            "aarch64-pc-windows-gnullvm;arm64;win;mingw;zigbuild;.exe"
           )
 
           for entry in "${targets[@]}"; do
-            read -r tgt arch os abi method ext <<< "$entry"
+            IFS=';' read -r tgt arch os abi method ext <<< "$entry"
             if [ -n "$abi" ]; then
               BIN="bpan-${os}-${arch}-${abi}${ext}"
             else
               BIN="bpan-${os}-${arch}${ext}"
             fi
             echo ""
-            echo "==> building $os/$arch/$abi ($tgt, $method)"
+            echo "==> building $os/$arch/${abi:-native} ($tgt, $method)"
             if [ "$method" = "native" ]; then
               cargo build --release --target "$tgt" --locked 2>&1 | tail -10
             else
