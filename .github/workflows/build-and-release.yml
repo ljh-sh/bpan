@@ -108,15 +108,15 @@ jobs:
 
       - name: generate SHA256SUMS
         run: |
+          set -euo pipefail
           cd dist
-          # Walk each -pkg dir and tar.xz + hash
+          # Each -pkg dir becomes its own .tar.xz (binary already at bin/<name>).
           for pkg in */; do
             name="${pkg%/}"
-            arch="${name%-pkg}"
-            (cd "$pkg" && tar -cJf "../../${arch}.tar.xz" .)
+            tar -cJf "${name}.tar.xz" "$pkg"
           done
-          sha256sum -- *.tar.xz > SHA256SUMS
           ls -lh
+          sha256sum -- *.tar.xz > SHA256SUMS
           cat SHA256SUMS
 
       - name: sign SHA256SUMS (cosign keyless)
