@@ -119,10 +119,11 @@ jobs:
           sha256sum -- *.tar.xz > SHA256SUMS
           cat SHA256SUMS
 
-      - name: sign SHA256SUMS (cosign keyless)
+      - name: install cosign + sign SHA256SUMS
         env:
           COSIGN_EXPERIMENTAL: '1'
         run: |
+          brew install cosign
           cosign sign-blob --yes \
             --output-signature dist/SHA256SUMS.sig \
             --bundle dist/SHA256SUMS.bundle \
