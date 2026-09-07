@@ -139,10 +139,17 @@ jobs:
           else
             TAG="${{ github.ref_name }}"
           fi
+          # Only upload files (skip pkg dirs from dist/).
+          shopt -s nullglob
+          assets=(dist/*.tar.xz dist/SHA256SUMS dist/SHA256SUMS.sig dist/SHA256SUMS.bundle)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "::error::No assets found in dist/"
+            exit 1
+          fi
           gh release create "$TAG" \
             --title "bpan ${TAG#v}" \
             --generate-notes \
             --draft \
-            dist/* || \
-          gh release upload "$TAG" dist/* --clobber
+            "${assets[@]}" || \
+          gh release upload "$TAG" "${assets[@]}" --clobber
           echo "released=$TAG"
